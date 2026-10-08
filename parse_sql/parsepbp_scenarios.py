@@ -264,7 +264,8 @@ def bk(id, row, modinfo, unusualplayflag):
 def field(id, row, modinfo, runnerinfo, unusualplayflag, outdatedrelayflag):
     printstr = f"field play, "
 
-    if "+" in row[6].split(".")[0]:
+    # Combined play involving a field play occurs when there is an error on the strikeout/walk.
+    if "+" in row[6].split(".")[0].split("/")[0]:
         row[6] = row[6][row[6].index("+")+1:]
 
     advinfo = [-2, -2, -2, -2]
@@ -307,8 +308,19 @@ def field(id, row, modinfo, runnerinfo, unusualplayflag, outdatedrelayflag):
                 advinfo[i] = i + 1
     if fo_flag or "(B)" in row[6]:
         autoadv = False
-    for i in range(len(advinfo)):
-        if autoadv and runnerinfo[i] != "" and advinfo[i] == -2:
+    # Only forced runners (every base behind them occupied) auto-advance, and never onto a base the runner ahead keeps.
+    # Runners that hold are often not annotated, e.g. 64(1)3/GDP.3-3 with the bases loaded ends the inning with the
+    # runner on 3rd staying put, so the runner on 2nd must stay put too. Go lead runner first so holds cascade backward.
+    # Explicit advance info (e.g. 3-3) isn't merged in until after this function, so check for runners who explicitly hold
+    holds = set()
+    if "." in row[6]:
+        for adv in row[6].split(".")[1].split(";"):
+            if len(adv) >= 3 and adv[1] == "-" and adv[0] == adv[2]:
+                holds.add(int(adv[0]))
+    for i in range(len(advinfo)-1, -1, -1):
+        forced = all(runnerinfo[j] != "" for j in range(i))
+        blocked = i + 1 < 4 and runnerinfo[i+1] != "" and (i + 1 in holds or advinfo[i+1] in (-2, i + 1))
+        if autoadv and forced and not blocked and runnerinfo[i] != "" and advinfo[i] == -2:
             advinfo[i] = i + 1
     
     printstr += "; next ".join(strsecs)
