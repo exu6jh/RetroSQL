@@ -10,6 +10,7 @@ class StolenBase:
         );
     """
     TABLE_DELETE = "DROP TABLE IF EXISTS StolenBases;"
+    TABLE_INSERT = "INSERT INTO StolenBases VALUES (?, ?, ?, ?, ?);"
 
     def __init__(self, id, playNum, sbs):
         self.id = str(id)
@@ -17,5 +18,4 @@ class StolenBase:
         self.sbs = sbs
 
     def __call__(self):
-        sql_str = f"INSERT INTO StolenBases VALUES ('{self.id}', '{self.playNum}', '{self.sbs[0]}', '{self.sbs[1]}', '{self.sbs[2]}');"
-        return sql_str
+        return (str(self.id), str(self.playNum), str(self.sbs[0]), str(self.sbs[1]), str(self.sbs[2]))

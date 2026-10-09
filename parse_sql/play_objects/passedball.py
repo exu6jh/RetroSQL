@@ -7,11 +7,11 @@ class PassedBall:
         );
     """
     TABLE_DELETE = "DROP TABLE IF EXISTS PassedBalls;"
+    TABLE_INSERT = "INSERT INTO PassedBalls VALUES (?, ?);"
 
     def __init__(self, id, playNum):
         self.id = str(id)
         self.playNum = int(playNum)
 
     def __call__(self):
-        sql_str = f"INSERT INTO PassedBalls VALUES ('{self.id}', '{self.playNum}');"
-        return sql_str
+        return (str(self.id), str(self.playNum))

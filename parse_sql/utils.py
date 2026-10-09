@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import csv
+from functools import cache
 from pathlib import Path
 
 # Takes a folder name and returns the tuple of file paths of all its contents
+@cache
 def get_filenames(folder: Path) -> tuple[str, ...]:
     return tuple(path for path in folder.iterdir() if path.is_file())
 

@@ -7,11 +7,11 @@ class OutAdvancing:
         );
     """
     TABLE_DELETE = "DROP TABLE IF EXISTS OutAdvancings;"
+    TABLE_INSERT = "INSERT INTO OutAdvancings VALUES (?, ?);"
 
     def __init__(self, id, playNum):
         self.id = str(id)
         self.playNum = int(playNum)
 
     def __call__(self):
-        sql_str = f"INSERT INTO OutAdvancings VALUES ('{self.id}', '{self.playNum}');"
-        return sql_str
+        return (str(self.id), str(self.playNum))

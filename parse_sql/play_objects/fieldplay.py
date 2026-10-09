@@ -8,6 +8,7 @@ class FieldPlay:
         );
     """
     TABLE_DELETE = "DROP TABLE IF EXISTS FieldPlays;"
+    TABLE_INSERT = "INSERT INTO FieldPlays VALUES (?, ?, ?);"
 
     def __init__(self, id, playNum, location):
         self.id = str(id)
@@ -15,5 +16,4 @@ class FieldPlay:
         self.location = str(location)
 
     def __call__(self):
-        sql_str = f"INSERT INTO FieldPlays VALUES ('{self.id}', '{self.playNum}', '{self.location}');"
-        return sql_str
+        return (str(self.id), str(self.playNum), str(self.location))

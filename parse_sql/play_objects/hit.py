@@ -9,6 +9,7 @@ class Hit:
         );
     """
     TABLE_DELETE = "DROP TABLE IF EXISTS Hits;"
+    TABLE_INSERT = "INSERT INTO Hits VALUES (?, ?, ?, ?);"
 
     def __init__(self, id, playNum, tpe, location):
         self.id = str(id)
@@ -17,5 +18,4 @@ class Hit:
         self.location = str(location)
 
     def __call__(self):
-        sql_str = f"INSERT INTO Hits VALUES ('{self.id}', '{self.playNum}', '{self.tpe}', '{self.location}');"
-        return sql_str
+        return (str(self.id), str(self.playNum), str(self.tpe), str(self.location))

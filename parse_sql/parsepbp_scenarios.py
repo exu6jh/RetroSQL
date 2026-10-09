@@ -2,13 +2,6 @@ import re
 from parsepbp_utils import parse_hitlocation, HITLOCATION_REGEX, debugprint, FIELD_BY_NUM
 from utils import construct_player_dict
 
-
-def add_to_dict(dct, itm):
-    if itm in dct:
-        dct[itm] = dct[itm] + 1
-    else:
-        dct[itm] = 1
-
 std_mod_strs = {
     "BF": ", bunt foul",
     "C": ", called strike",
@@ -44,6 +37,13 @@ fielder_names = {
 }
 
 PLAYERS = construct_player_dict()
+NARRATE = False
+
+def describe_hitlocation(code):
+    return f" on a {parse_hitlocation(code)}" if NARRATE else ""
+
+def describe_fielders(nums):
+    return ", ".join([fielder_names[chr] for chr in nums]) if NARRATE else ""
 
 # In-park non-HR hit
 def std_hit(id, row, modinfo, basicplay, unusualplayflag, outdatedrelayflag):
@@ -56,14 +56,14 @@ def std_hit(id, row, modinfo, basicplay, unusualplayflag, outdatedrelayflag):
     elif basicplay[0] == "T":
         printstr = f"{PLAYERS[row[3]]} triples"
     if len(basicplay) > 1:
-        printstr += f", fielded by {", ".join([fielder_names[chr] for chr in basicplay[1:]])}"
+        printstr += f", fielded by {describe_fielders(basicplay[1:])}"
     for k in range(1, len(modinfo)):
         if modinfo[k].endswith("#"):
             modinfo[k] = modinfo[k][:-1]
         if modinfo[k] in std_mod_strs:
             printstr += std_mod_strs[modinfo[k]]
         elif re.fullmatch(HITLOCATION_REGEX, modinfo[k]) and not modinfo[k] == "":
-            printstr += f" on a {parse_hitlocation(modinfo[k])}"
+            printstr += describe_hitlocation(modinfo[k])
             locstr = modinfo[k]
         elif re.fullmatch(r"TH[1-3H]?", modinfo[k]):
             if modinfo[k] == "TH":
@@ -114,7 +114,7 @@ def grd(id, row, modinfo, basicplay, unusualplayflag):
         if modinfo[k] in std_mod_strs:
             printstr += std_mod_strs[modinfo[k]]
         elif re.fullmatch(HITLOCATION_REGEX, modinfo[k]) and not modinfo[k] == "":
-            printstr += f" on a {parse_hitlocation(modinfo[k])}"
+            printstr += describe_hitlocation(modinfo[k])
             locstr = modinfo[k]
         elif unusualplayflag:
             debugprint("Unexpected ground rule double modifier", id, row)
@@ -126,7 +126,7 @@ def hr(id, row, modinfo, basicplay, unusualplayflag):
     tpe = ""
     location = ""
     if len(basicplay) > 2:
-        printstr = f"inside-the-park home run batted by {PLAYERS[row[3]]} fielded by {", ".join([fielder_names[chr] for chr in basicplay[2:]])}"
+        printstr = f"inside-the-park home run batted by {PLAYERS[row[3]]} fielded by {describe_fielders(basicplay[2:])}"
         tpe = "I"
         for k in range(1, len(modinfo)):
             if modinfo[k].endswith("#"):
@@ -134,7 +134,7 @@ def hr(id, row, modinfo, basicplay, unusualplayflag):
             if modinfo[k] == "IPHR":
                 continue
             elif re.fullmatch(HITLOCATION_REGEX, modinfo[k]) and not modinfo[k] == "":
-                printstr += f" on a {parse_hitlocation(modinfo[k])}"
+                printstr += describe_hitlocation(modinfo[k])
                 location = modinfo[k]
             elif re.fullmatch(r"R[1-9]+", modinfo[k]):
                 printstr += f", subsequent relay to fielder(s) {modinfo[k][1:]} fails to secure any outs"
@@ -162,7 +162,7 @@ def hr(id, row, modinfo, basicplay, unusualplayflag):
             elif modinfo[k] == "9":
                 printstr += f" to right field"
             elif re.fullmatch(HITLOCATION_REGEX, modinfo[k]) and not modinfo[k] == "":
-                printstr += f" on a {parse_hitlocation(modinfo[k])}"
+                printstr += describe_hitlocation(modinfo[k])
                 location = modinfo[k]
             elif unusualplayflag:
                 debugprint("Unexpected home run modifier", id, row)
@@ -173,7 +173,7 @@ def so(id, row, modinfo, basicplay, unusualplayflag):
     printstr = f"{PLAYERS[row[3]]} strikes out"
     k_type = "K"
     if len(basicplay) > 1:
-        printstr = f"{PLAYERS[row[3]]} strikes out on a dropped third strike, fielded by {", ".join([fielder_names[chr] for chr in basicplay[1:]])}"
+        printstr = f"{PLAYERS[row[3]]} strikes out on a dropped third strike, fielded by {describe_fielders(basicplay[1:])}"
         if basicplay == "K23":
             printstr = f"{PLAYERS[row[3]]} strikes out on a dropped third strike, catcher throws down to 1B ({basicplay})"
         elif basicplay in ["K13", "K213"]:
@@ -277,7 +277,7 @@ def field(id, row, modinfo, runnerinfo, unusualplayflag, outdatedrelayflag):
         if "E" in play_sec[0]:
             fielders = play_sec[0].split("E")
             if len(fielders[0]) > 0:
-                strsecs.append(f"fielded by {", ".join([fielder_names[chr] for chr in fielders[0]])} before error by {fielder_names[fielders[1]]}")
+                strsecs.append(f"fielded by {describe_fielders(fielders[0])} before error by {fielder_names[fielders[1]]}")
             else:
                 strsecs.append(f"error by {fielder_names[fielders[1]]}")
             advinfo[0] = 1
@@ -285,14 +285,14 @@ def field(id, row, modinfo, runnerinfo, unusualplayflag, outdatedrelayflag):
             continue
         out = 0
         if len(play_sec) > 1:
-            strsecs.append(f"fielded by {", ".join([fielder_names[chr] for chr in play_sec[0]])} to get runner on {play_sec[1]} out")
+            strsecs.append(f"fielded by {describe_fielders(play_sec[0])} to get runner on {play_sec[1]} out")
             autoadv = True
             if play_sec[1] == "B":
                 out = 0
             else:
                 out = int(play_sec[1])
         else:
-            strsecs.append(f"fielded by {", ".join([fielder_names[chr] for chr in play_sec[0]])} to get batter out")
+            strsecs.append(f"fielded by {describe_fielders(play_sec[0])} to get batter out")
         advinfo[out] = -1
     fo_flag = False
     for mod in modinfo:
@@ -336,7 +336,7 @@ def field(id, row, modinfo, runnerinfo, unusualplayflag, outdatedrelayflag):
         if modinfo[k] in std_mod_strs:
             printstr += std_mod_strs[modinfo[k]]
         elif re.fullmatch(HITLOCATION_REGEX, modinfo[k]) and not modinfo[k] == "":
-            printstr += f" on a {parse_hitlocation(modinfo[k])}"
+            printstr += describe_hitlocation(modinfo[k])
             location = modinfo[k]
         elif re.fullmatch(r"R[1-9]+", modinfo[k]):
             printstr += f", subsequent relay to fielder(s) {modinfo[k][1:]} fails to secure any outs"
@@ -393,7 +393,7 @@ def fle(id, row, modinfo, basicplay, unusualplayflag):
     location = ""
     for k in range(1, len(modinfo)):
         if re.fullmatch(HITLOCATION_REGEX, modinfo[k]) and not modinfo[k] == "":
-            printstr += f" on a {parse_hitlocation(modinfo[k])}"
+            printstr += describe_hitlocation(modinfo[k])
             location = modinfo[k]
         elif modinfo[k] == "FL":
             if unusualplayflag:
@@ -416,7 +416,7 @@ def fc(id, row, modinfo, basicplay, unusualplayflag, outdatedrelayflag):
             printstr += std_mod_strs[modinfo[k]]
         elif re.fullmatch(HITLOCATION_REGEX, modinfo[k]) and not modinfo[k] == "":
             location = modinfo[k]
-            printstr += f" on a {parse_hitlocation(modinfo[k])}"
+            printstr += describe_hitlocation(modinfo[k])
         elif re.fullmatch(r"TH[1-3H]?", modinfo[k]):
             if modinfo[k] == "TH":
                 printstr += f", throw to unspecified base"
@@ -537,7 +537,7 @@ def pocs(id, row, modinfo, basicplay, unusualplayflag, outdatedrelayflag, hitloc
                 continue
                 
             if re.fullmatch(r"[1-9]+", subsec):
-                secstr = f"{secstr}, fielded by {", ".join([fielder_names[chr] for chr in subsec])}"
+                secstr = f"{secstr}, fielded by {describe_fielders(subsec)}"
             elif re.fullmatch(r"E[1-9](\/TH)?", subsec):
                 if subsec.endswith("/TH"):
                     secstr = f"{secstr}, throwing error by {subsec[1]} prevents out"
@@ -545,9 +545,9 @@ def pocs(id, row, modinfo, basicplay, unusualplayflag, outdatedrelayflag, hitloc
                     secstr = f"{secstr}, error by {subsec[1]} prevents out"
             elif re.fullmatch(r"[1-9]+(E[1-9](\/TH)?)", subsec):
                 if subsec.endswith("/TH"):
-                    secstr = f"{secstr}, fielded by {", ".join([fielder_names[chr] for chr in subsec[:-5]])} until throwing error by {fielder_names[subsec[-4]]} prevents out"
+                    secstr = f"{secstr}, fielded by {describe_fielders(subsec[:-5])} until throwing error by {fielder_names[subsec[-4]]} prevents out"
                 else:
-                    secstr = f"{secstr}, fielded by {", ".join([fielder_names[chr] for chr in subsec[:-2]])} until final error by {fielder_names[subsec[-1]]}"
+                    secstr = f"{secstr}, fielded by {describe_fielders(subsec[:-2])} until final error by {fielder_names[subsec[-1]]}"
             elif subsec == "UR":
                 secstr = f"{secstr}, unearned run"
             elif unusualplayflag:
@@ -617,7 +617,7 @@ def inf(id, row, modinfo, unusualplayflag):
             for k in range(2, len(modinfo)):
                 if re.fullmatch(HITLOCATION_REGEX, modinfo[k]) and not modinfo[k] == "":
                     basestr = f"during {PLAYERS[row[3]]} at-bat, catcher obstruction"
-                    appendstr = f"{appendstr} on a {parse_hitlocation(modinfo[k])}"
+                    appendstr += describe_hitlocation(modinfo[k])
                 elif modinfo[k] == "OBS":
                     basestr = f"during {PLAYERS[row[3]]} at-bat, catcher obstruction"
                 elif modinfo[k] == "INT":
@@ -631,7 +631,7 @@ def inf(id, row, modinfo, unusualplayflag):
         printstr = f"during {PLAYERS[row[3]]} at-bat, obstruction (generally of batter running to first) by {FIELD_BY_NUM[int(modinfo[1][1])-1]}"
         for k in range(2, len(modinfo)):
             if re.fullmatch(HITLOCATION_REGEX, modinfo[k]) and not modinfo[k] == "":
-                printstr += f" on a {parse_hitlocation(modinfo[k])}"
+                printstr += describe_hitlocation(modinfo[k])
             elif (modinfo[k] == "OBS"):
                 # Since all such fielder 'interferences' are actually obstructions, technically
                 # all such plays should have this flag
@@ -645,7 +645,7 @@ def inf(id, row, modinfo, unusualplayflag):
         printstr = f"during {PLAYERS[row[3]]} at-bat, defensive shift violation by {FIELD_BY_NUM[int(modinfo[1][1])-1]}"
         for k in range(2, len(modinfo)):
             if re.fullmatch(HITLOCATION_REGEX, modinfo[k]):
-                printstr += f" on a {parse_hitlocation(modinfo[k])}"
+                printstr += describe_hitlocation(modinfo[k])
             elif unusualplayflag:
                 debugprint("Unexpected interference modifier", id, row)
         fielder = 4

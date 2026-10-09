@@ -8,6 +8,7 @@ class Strikeout:
         );
     """
     TABLE_DELETE = "DROP TABLE IF EXISTS Strikeouts;"
+    TABLE_INSERT = "INSERT INTO Strikeouts VALUES (?, ?, ?);"
 
     def __init__(self, id, playNum, tpe):
         self.id = str(id)
@@ -15,5 +16,4 @@ class Strikeout:
         self.tpe = str(tpe)
 
     def __call__(self):
-        sql_str = f"INSERT INTO Strikeouts VALUES ('{self.id}', '{self.playNum}', '{self.tpe}');"
-        return sql_str
+        return (str(self.id), str(self.playNum), str(self.tpe))

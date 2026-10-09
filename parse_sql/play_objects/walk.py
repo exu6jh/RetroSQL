@@ -8,6 +8,7 @@ class Walk:
         );
     """
     TABLE_DELETE = "DROP TABLE IF EXISTS Walks;"
+    TABLE_INSERT = "INSERT INTO Walks VALUES (?, ?, ?);"
 
     def __init__(self, id, playNum, tpe):
         self.id = str(id)
@@ -15,5 +16,4 @@ class Walk:
         self.tpe = bool(tpe)
 
     def __call__(self):
-        sql_str = f"INSERT INTO Walks VALUES ('{self.id}', '{self.playNum}', '{self.tpe}');"
-        return sql_str
+        return (str(self.id), str(self.playNum), str(self.tpe))

@@ -13,6 +13,7 @@ class PickOffCaughtStealing:
         );
     """
     TABLE_DELETE = "DROP TABLE IF EXISTS PickOffCaughtStealings;"
+    TABLE_INSERT = "INSERT INTO PickOffCaughtStealings VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
 
     def __init__(self, id, playNum, pos, css):
         self.id = str(id)
@@ -21,5 +22,4 @@ class PickOffCaughtStealing:
         self.css = css
 
     def __call__(self):
-        sql_str = f"INSERT INTO PickOffCaughtStealings VALUES ('{self.id}', '{self.playNum}', '{self.pos[0]}', '{self.pos[1]}', '{self.pos[2]}', '{self.css[0]}', '{self.css[1]}', '{self.css[2]}');"
-        return sql_str
+        return (str(self.id), str(self.playNum), str(self.pos[0]), str(self.pos[1]), str(self.pos[2]), str(self.css[0]), str(self.css[1]), str(self.css[2]))

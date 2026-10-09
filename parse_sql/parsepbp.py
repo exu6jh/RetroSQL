@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import csv, re, sqlite3
+from collections import defaultdict
 from pathlib import Path
-from sqlite3 import Cursor
 
 from play_objects.balk import Balk
 from play_objects.defensiveindifference import DefensiveIndifference
@@ -23,6 +23,7 @@ from play_objects.walk import Walk
 from play_objects.wildpitch import WildPitch
 from parsepbp_utils import parse_advinfo, debugprint
 from parsepbp_scenarios import *
+import parsepbp_scenarios
 from utils import get_filenames
 
 def push_up(runner_info: list[int]) -> list[int]:
@@ -44,11 +45,12 @@ def auto_advance(runner_info: list[int], bases: int, batter_pos: int = None) -> 
         a[0] = batter_pos
     return a
 
-def add_to_sql(sql_obj: str, narrateflag: bool, cur: Cursor) -> None:
-    sql_obj_str = sql_obj()
+# Rows are queued per insert statement and written with executemany once per file, which is much faster than one execute per row
+def add_to_sql(sql_obj, narrateflag: bool, pending: defaultdict[str, list[tuple]]) -> None:
+    values = sql_obj()
     if narrateflag:
-        print(sql_obj_str)
-    cur.execute(sql_obj_str)
+        print(sql_obj.TABLE_INSERT, values)
+    pending[sql_obj.TABLE_INSERT].append(values)
 
 # printstr is the natural language parsing of the play for display
 # expected_advinfo is the default expected advance information based on the play; actual advance info supersedes where available
@@ -62,6 +64,7 @@ def db_by_year(gametype: str, year: int) -> None:
     unusualplayflag = True
     outdatedrelayflag = False
     hitlocationflag = False
+    parsepbp_scenarios.NARRATE = narrateflag or extranarrateflag
 
     id=''
     inn = -1
@@ -115,6 +118,7 @@ def db_by_year(gametype: str, year: int) -> None:
     for filename in search_files:
         if not str(year) in filename.name:
             continue
+        pending = defaultdict(list)
         with open(filename, newline='', encoding="utf8") as csvfile:
             print(f"Processing {filename}")
             logreader = csv.reader(csvfile)
@@ -193,31 +197,31 @@ def db_by_year(gametype: str, year: int) -> None:
                             expected_advinfo = auto_advance(runner_info, 0, batter_pos=1)
                             basictype = "S"
                             single_sql = Hit(id, playNum, "S", location)
-                            add_to_sql(single_sql, extranarrateflag, cur)
+                            add_to_sql(single_sql, extranarrateflag, pending)
                         elif basicplay[0] == "D":
                             expected_advinfo = auto_advance(runner_info, 0, batter_pos=2)
                             basictype = "D"
                             double_sql = Hit(id, playNum, "D", location)
-                            add_to_sql(double_sql, extranarrateflag, cur)
+                            add_to_sql(double_sql, extranarrateflag, pending)
                         elif basicplay[0] == "T":
                             expected_advinfo = auto_advance(runner_info, 0, batter_pos=3)
                             basictype = "T"
                             triple_sql = Hit(id, playNum, "T", location)
-                            add_to_sql(triple_sql, extranarrateflag, cur)
+                            add_to_sql(triple_sql, extranarrateflag, pending)
                     elif re.fullmatch(r"DGR[1-9]*",basicplay):
                         # Ground-rule double
                         printstr, location = grd(id, row, modinfo, basicplay, unusualplayflag)
                         expected_advinfo = auto_advance(runner_info, 2)
                         basictype = "DG"
                         grd_sql = Hit(id, playNum, "G", location)
-                        add_to_sql(grd_sql, extranarrateflag, cur)
+                        add_to_sql(grd_sql, extranarrateflag, pending)
                     elif re.fullmatch(r"HR[3-9]*",basicplay):
                         # Home run (numbers indicate fielders for inside-the-parkers)
                         printstr, tpe, location = hr(id, row, modinfo, basicplay, unusualplayflag)
                         expected_advinfo = auto_advance(runner_info, 4)
                         basictype = "HR"
                         hr_sql = Hit(id, playNum, tpe, location)
-                        add_to_sql(hr_sql, extranarrateflag, cur)
+                        add_to_sql(hr_sql, extranarrateflag, pending)
                     
                     ## Pitcher-oriented events
                     elif re.fullmatch(r"K\d*",basicplay):
@@ -226,14 +230,14 @@ def db_by_year(gametype: str, year: int) -> None:
                         expected_advinfo = auto_advance(runner_info, 0, batter_pos=-1)
                         basictype = "K"
                         k_sql = Strikeout(id, playNum, k_type)
-                        add_to_sql(k_sql, extranarrateflag, cur)
+                        add_to_sql(k_sql, extranarrateflag, pending)
                     elif(basicplay == 'W'):
                         # Walk
                         printstr = walk(id, row, modinfo, unusualplayflag, outdatedrelayflag)
                         expected_advinfo = push_up(runner_info)
                         basictype = "W"
                         walk_sql = Walk(id, playNum, False)
-                        add_to_sql(walk_sql, extranarrateflag, cur)
+                        add_to_sql(walk_sql, extranarrateflag, pending)
                     elif(basicplay == 'I' or basicplay == 'IW'):
                         # Intentional walk
                         printstr = f"{row[3]} intentionally walked"
@@ -245,7 +249,7 @@ def db_by_year(gametype: str, year: int) -> None:
                                 debugprint("Unexpected modifier on intentional walk", id, row)
                         basictype = "IW"
                         iwalk_sql = Walk(id, playNum, True)
-                        add_to_sql(iwalk_sql, extranarrateflag, cur)
+                        add_to_sql(iwalk_sql, extranarrateflag, pending)
                     elif("+" in basicplay):
                         # Combined play, mostly strikeout + some other event or (intentional) walk{ + }some other event
                         secs = basicplay.split("+")
@@ -256,17 +260,17 @@ def db_by_year(gametype: str, year: int) -> None:
                             firststr, k_type = so(id, row, [], firstplay, unusualplayflag)
                             firstadv = auto_advance(runner_info, 0, batter_pos=-1)
                             k_sql = Strikeout(id, playNum, k_type)
-                            add_to_sql(k_sql, extranarrateflag, cur)
+                            add_to_sql(k_sql, extranarrateflag, pending)
                         elif firstplay == "W":
                             firststr = walk(id, row, [], firstplay, unusualplayflag)
                             firstadv = push_up(runner_info)
                             walk_sql = Walk(id, playNum, False)
-                            add_to_sql(walk_sql, extranarrateflag, cur)
+                            add_to_sql(walk_sql, extranarrateflag, pending)
                         elif firstplay == "I" or firstplay == "IW":
                             firststr = f"{row[3]} intentionally walked"
                             firstadv = push_up(runner_info)
                             iwalk_sql = Walk(id, playNum, True)
-                            add_to_sql(iwalk_sql, extranarrateflag, cur)
+                            add_to_sql(iwalk_sql, extranarrateflag, pending)
                         basictype = "CM"
                             
                         addplay = secs[1]
@@ -275,7 +279,7 @@ def db_by_year(gametype: str, year: int) -> None:
                         if re.fullmatch(r"((CS|POCS)[1-3H]\([1-9]+\);)*((PO|CS|POCS)[1-3H]\([1-9]*(E[1-9](\/TH)?)?\)(\(T?UR\))?)", addplay):
                             secondstr, secondadv, pos, css = pocs(id, row, modinfo, addplay, unusualplayflag, outdatedrelayflag, hitlocationflag)
                             pocs_sql = PickOffCaughtStealing(id, playNum, pos, css)
-                            add_to_sql(pocs_sql, extranarrateflag, cur)
+                            add_to_sql(pocs_sql, extranarrateflag, pending)
                         elif re.fullmatch(r"(SB([2-3H](\(T?UR\))?);)*SB([2-3H](\(T?UR\))?)", addplay):
                             secondstr = sb(id, row, modinfo, addplay, unusualplayflag, outdatedrelayflag, hitlocationflag)
                             sbs = [False, False, False]
@@ -287,32 +291,32 @@ def db_by_year(gametype: str, year: int) -> None:
                                     secondadv[int(stolen_base[2])-1] = int(stolen_base[2])
                                     sbs[int(stolen_base[2])-2] = True
                             sb_sql = StolenBase(id, playNum, sbs)
-                            add_to_sql(sb_sql, extranarrateflag, cur)
+                            add_to_sql(sb_sql, extranarrateflag, pending)
                         elif addplay == "WP":
                             secondstr = wp(id, row, modinfo, unusualplayflag)
                             secondadv = auto_advance(runner_info, 0)
                             wp_sql = WildPitch(id, playNum)
-                            add_to_sql(wp_sql, extranarrateflag, cur)
+                            add_to_sql(wp_sql, extranarrateflag, pending)
                         elif addplay == "PB":
                             secondstr = pb(id, row, modinfo, unusualplayflag)
                             secondadv = auto_advance(runner_info, 0)
                             pb_sql = PassedBall(id, playNum)
-                            add_to_sql(pb_sql, extranarrateflag, cur)
+                            add_to_sql(pb_sql, extranarrateflag, pending)
                         elif addplay == "OA":
                             secondstr = oa(id, row, modinfo, unusualplayflag, outdatedrelayflag)
                             secondadv = auto_advance(runner_info, 0)
                             oa_sql = OutAdvancing(id, playNum)
-                            add_to_sql(oa_sql, extranarrateflag, cur)
+                            add_to_sql(oa_sql, extranarrateflag, pending)
                         elif addplay == "DI":
                             secondstr = f"Runner advances on defensive indifference"
                             secondadv = auto_advance(runner_info, 0)
                             di_sql = DefensiveIndifference(id, playNum)
-                            add_to_sql(di_sql, extranarrateflag, cur)
+                            add_to_sql(di_sql, extranarrateflag, pending)
                         elif addplay in ["E2", "E1", "E3"]:
                             secondstr = field(id, row, modinfo, runner_info, unusualplayflag, outdatedrelayflag)
                             secondadv = auto_advance(runner_info, 0)
                             field_sql = FieldPlay(id, playNum, None)
-                            add_to_sql(field_sql, extranarrateflag, cur)
+                            add_to_sql(field_sql, extranarrateflag, pending)
                             
                         printstr = f"{firststr}. {secondstr}"
                         for i in range(len(expected_advinfo)):
@@ -326,28 +330,28 @@ def db_by_year(gametype: str, year: int) -> None:
                         expected_advinfo = push_up(runner_info)
                         basictype = "HP"
                         hbp_sql = HitByPitch(id, playNum)
-                        add_to_sql(hbp_sql, extranarrateflag, cur)
+                        add_to_sql(hbp_sql, extranarrateflag, pending)
                     elif basicplay == 'WP':
                         # Wild pitch
                         printstr = wp(id, row, modinfo, unusualplayflag)
                         expected_advinfo = auto_advance(runner_info, 0)
                         basictype = "WP"
                         wp_sql = WildPitch(id, playNum)
-                        add_to_sql(wp_sql, extranarrateflag, cur)
+                        add_to_sql(wp_sql, extranarrateflag, pending)
                     elif(basicplay == 'PB'):
                         # Passed ball
                         printstr = pb(id, row, modinfo, unusualplayflag)
                         expected_advinfo = auto_advance(runner_info, 0)
                         basictype = "PB"
                         pb_sql = PassedBall(id, playNum)
-                        add_to_sql(pb_sql, extranarrateflag, cur)
+                        add_to_sql(pb_sql, extranarrateflag, pending)
                     elif(basicplay == "BK"):
                         # Balk
                         printstr = bk(id, row, modinfo, unusualplayflag)
                         expected_advinfo = auto_advance(runner_info, 1, batter_pos=0)
                         basictype = "BK"
                         bk_sql = Balk(id, playNum)
-                        add_to_sql(bk_sql, extranarrateflag, cur)
+                        add_to_sql(bk_sql, extranarrateflag, pending)
                     
                     ## Fielder-oriented events
                     elif re.fullmatch(r"([1-9]+\([B1-3]\))*[1-9E]*", basicplay):
@@ -355,27 +359,27 @@ def db_by_year(gametype: str, year: int) -> None:
                         printstr, expected_advinfo, location, sac = field(id, row, modinfo, runner_info, unusualplayflag, outdatedrelayflag)
                         basictype = "FD"
                         fd_sql = FieldPlay(id, playNum, location)
-                        add_to_sql(fd_sql, extranarrateflag, cur)
+                        add_to_sql(fd_sql, extranarrateflag, pending)
                         if sac:
                             sac_sql = Sacs(id, playNum)
-                            add_to_sql(sac_sql, extranarrateflag, cur)
+                            add_to_sql(sac_sql, extranarrateflag, pending)
                     elif re.fullmatch(r"FLE[1-9]", basicplay):
                         # Dropped foul fly ball error
                         printstr, location = fle(id, row, modinfo, basicplay, unusualplayflag)
                         expected_advinfo = auto_advance(runner_info, 0)
                         basictype = "FE"
                         fle_sql = DroppedFoulError(id, playNum, basicplay[3], location)
-                        add_to_sql(fle_sql, extranarrateflag, cur)
+                        add_to_sql(fle_sql, extranarrateflag, pending)
                     elif re.fullmatch(r"FC([1-9])?", basicplay):
                         # Fielder's choice
                         printstr, fielder, location, sac = fc(id, row, modinfo, basicplay, unusualplayflag, outdatedrelayflag)
                         expected_advinfo = auto_advance(runner_info, 0, batter_pos=1)
                         basictype = "FC"
                         fc_sql = FieldersChoice(id, playNum, fielder, location)
-                        add_to_sql(fc_sql, extranarrateflag, cur)
+                        add_to_sql(fc_sql, extranarrateflag, pending)
                         if sac:
                             sac_sql = Sacs(id, playNum)
-                            add_to_sql(sac_sql, extranarrateflag, cur)
+                            add_to_sql(sac_sql, extranarrateflag, pending)
                     
                     ## Baserunner-oriented events
                     elif(re.fullmatch(r"(SB([2-3H](\(T?UR\))?);)*SB([2-3H](\(T?UR\))?)", basicplay)):
@@ -391,20 +395,20 @@ def db_by_year(gametype: str, year: int) -> None:
                         printstr = sb(id, row, modinfo, basicplay, unusualplayflag, outdatedrelayflag, hitlocationflag)
                         basictype = "SB"
                         sb_sql = StolenBase(id, playNum, sbs)
-                        add_to_sql(sb_sql, extranarrateflag, cur)
+                        add_to_sql(sb_sql, extranarrateflag, pending)
                     elif(re.fullmatch(r"((CS|POCS)[1-3H]\([1-9]+\);)*((PO|CS|POCS)[1-3H]\([1-9]*(E[1-9](\/TH)?)?\)(\(T?UR\))?)", basicplay)):
                         # PO/CS/POCS
                         printstr, expected_advinfo, pos, css = pocs(id, row, modinfo, basicplay, unusualplayflag, outdatedrelayflag, hitlocationflag)
                         basictype = "PC"
                         pocs_sql = PickOffCaughtStealing(id, playNum, pos, css)
-                        add_to_sql(pocs_sql, extranarrateflag, cur)
+                        add_to_sql(pocs_sql, extranarrateflag, pending)
                     elif basicplay == 'OA':
                         # Out advancing, runner advance should be explicitly given
                         printstr = oa(id, row, modinfo, unusualplayflag, outdatedrelayflag)
                         expected_advinfo = auto_advance(runner_info, 0)
                         basictype = "OA"
                         oa_sql = OutAdvancing(id, playNum)
-                        add_to_sql(oa_sql, extranarrateflag, cur)
+                        add_to_sql(oa_sql, extranarrateflag, pending)
                     elif(basicplay == "DI"):
                         # Defensive indifference, generally only ever the one event followed by advance info
                         printstr = f'during {row[3]} at-bat, advance on defensive indifference'
@@ -413,7 +417,7 @@ def db_by_year(gametype: str, year: int) -> None:
                         expected_advinfo = auto_advance(runner_info, 0)
                         basictype = "DI"
                         di_sql = DefensiveIndifference(id, playNum)
-                        add_to_sql(di_sql, extranarrateflag, cur)
+                        add_to_sql(di_sql, extranarrateflag, pending)
                     
                     ## Other
                     elif(basicplay == "C"):
@@ -422,7 +426,7 @@ def db_by_year(gametype: str, year: int) -> None:
                         expected_advinfo = push_up(runner_info)
                         basictype = "CI"
                         int_sql = Interference(id, playNum, fielder)
-                        add_to_sql(int_sql, extranarrateflag, cur)
+                        add_to_sql(int_sql, extranarrateflag, pending)
                     elif(basicplay == 'NP'):
                         # No pitch
                         if not row[6] == 'NP' and unusualplayflag:
@@ -462,10 +466,7 @@ def db_by_year(gametype: str, year: int) -> None:
 
                     if row[6] != "NP":
                         play_sql = Play(id, playNum, inn, half, outs, row[3], fielders[1-half][0], basictype, runner_info, cleaned_advinfo, runs)
-                        play_sql_str = play_sql()
-                        if extranarrateflag:
-                            print(play_sql_str)
-                        cur.execute(play_sql_str)
+                        add_to_sql(play_sql, extranarrateflag, pending)
 
                     for i in range(len(deduced_advinfo)):
                         if deduced_advinfo[i] == -1:
@@ -502,6 +503,8 @@ def db_by_year(gametype: str, year: int) -> None:
                     radj_runner = (row[1], int(row[2]))
                     if narrateflag:
                         print(f"{row[1]} starts at base {row[2]}")
+        for insert, rows in pending.items():
+            cur.executemany(insert, rows)
         con.commit()
     con.close()
 

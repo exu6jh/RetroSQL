@@ -8,6 +8,7 @@ class Interference:
         );
     """
     TABLE_DELETE = "DROP TABLE IF EXISTS Interferences;"
+    TABLE_INSERT = "INSERT INTO Interferences VALUES (?, ?, ?);"
 
     def __init__(self, id, playNum, fielder):
         self.id = str(id)
@@ -15,5 +16,4 @@ class Interference:
         self.fielder = int(fielder)
 
     def __call__(self):
-        sql_str = f"INSERT INTO Interferences VALUES ('{self.id}', '{self.playNum}', '{self.fielder}');"
-        return sql_str
+        return (str(self.id), str(self.playNum), str(self.fielder))

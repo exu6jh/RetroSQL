@@ -7,11 +7,11 @@ class WildPitch:
         );
     """
     TABLE_DELETE = "DROP TABLE IF EXISTS WildPitches;"
+    TABLE_INSERT = "INSERT INTO WildPitches VALUES (?, ?);"
 
     def __init__(self, id, playNum):
         self.id = str(id)
         self.playNum = int(playNum)
 
     def __call__(self):
-        sql_str = f"INSERT INTO WildPitches VALUES ('{self.id}', '{self.playNum}');"
-        return sql_str
+        return (str(self.id), str(self.playNum))

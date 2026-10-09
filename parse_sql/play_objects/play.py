@@ -22,6 +22,7 @@ class Play:
         );
     """
     TABLE_DELETE = "DROP TABLE IF EXISTS Plays;"
+    TABLE_INSERT = "INSERT INTO Plays VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
 
     def __init__(self, id, playNum, inning, half, outs, batter, pitcher, play, runners, advances, runs):
         self.id = str(id)
@@ -43,5 +44,4 @@ class Play:
         self.runH = int(runs[1])
     
     def __call__(self):
-        sql_str = f"INSERT INTO Plays VALUES ('{self.id}', '{self.playNum}', '{self.inning}', '{self.half}', '{self.outs}', '{self.batter}', '{self.pitcher}', '{self.play}', '{self.runner1}', '{self.runner2}', '{self.runner3}', '{self.advanceB}', '{self.advance1}', '{self.advance2}', '{self.advance3}', '{self.runV}', '{self.runH}');"
-        return sql_str
+        return (str(self.id), str(self.playNum), str(self.inning), str(self.half), str(self.outs), str(self.batter), str(self.pitcher), str(self.play), str(self.runner1), str(self.runner2), str(self.runner3), str(self.advanceB), str(self.advance1), str(self.advance2), str(self.advance3), str(self.runV), str(self.runH))
