@@ -7,15 +7,16 @@ hittype = {
     "F": "fly ball"
 }
 
-basiczones = {
+zones = {
     "1": "the pitcher's mound",
     "15": "the area left of the pitcher's mound",
     "13": "the area right of the pitcher's mound",
     "2": "home plate",
     "25": "the left infield line",
     "23": "the right infield line",
-    "2L": "left of home plate(?)",
-    "2R": "right of home plate(?)",
+    "2L": "left of home plate",
+    "2R": "right of home plate",
+    "5L": "third base line",
     "5": "third base",
     "56": "3B-shortstop hole",
     "6": "shortstop",
@@ -25,25 +26,16 @@ basiczones = {
     "4": "2B",
     "34": "1B-2B hole",
     "3": "first base",
+    "3L": "first base line",
     "7L": "left outfield line",
     "7": "left field",
     "78": "left center field",
-    "8L": "slight left of center field(?)",
+    "8L": "slight left center field",
     "8": "center field",
-    "8R": "slight right of center field(?)",
+    "8R": "slight right center field",
     "89": "right center field",
     "9": "right field",
     "9L": "right outfield line",
-}
-
-singleuse_locations = {
-    "5L": "third base line(?)",
-    "3L": "first base line(?)",
-    "78XD": "very deep left center field",
-    "8LXD": "very deep slight left center field(?)",
-    "8XD": "very deep center field",
-    "8RXD": "very deep slight right center field(?)",
-    "89XD": "very deep right center field"
 }
 
 def parse_hitlocation(code):
@@ -64,80 +56,48 @@ def parse_hitlocation(code):
         translated = translated + hittype[hitcode[0]]
         hitcode = hitcode[1:]
     else:
-        translated = translated + "batted ball"
+        translated += "batted ball"
+
     wall = False
     if hitcode.endswith("W"):
         wall = True
         hitcode = hitcode[:-1]
     
-    # Outfield
-    if re.fullmatch(r"(7|78|8L|8|8R|89|9)(S|M|D)?", hitcode):
-        translated = translated + " to "
-        if hitcode.endswith("S"):
-            translated = translated + "shallow "
-            hitcode = hitcode[:-1]
-        elif hitcode.endswith("M"):
-            translated = translated + "medium-deep "
-            hitcode = hitcode[:-1]
-        elif hitcode.endswith("D"):
-            translated = translated + "deep "
-            hitcode = hitcode[:-1]
-        translated = translated + basiczones[hitcode]
-    # Infield
-    elif re.fullmatch(r"(56|6|6M|46|4M|4|34)(S|D)?", hitcode):
-        translated = translated + " to "
-        if hitcode.endswith("S"):
-            translated = translated + "shallow "
-            hitcode = hitcode[:-1]
-        elif hitcode.endswith("D"):
-            translated = translated + "deep "
-            hitcode = hitcode[:-1]
-        translated = translated + basiczones[hitcode]
-    # Along the lines
-    elif re.fullmatch(r"(5|3|7L|9L)(S|M|D)?F?", hitcode):
-        translated = translated + " to "
-        foul = False
-        if hitcode.endswith("F"):
-            foul = True
-            hitcode = hitcode[:-1]
-        if hitcode.endswith("S"):
-            translated = translated + "shallow "
-            hitcode = hitcode[:-1]
-        elif hitcode.endswith("M"):
-            translated = translated + "medium-deep "
-            hitcode = hitcode[:-1]
-        elif hitcode.endswith("D"):
-            translated = translated + "deep "
-            hitcode = hitcode[:-1]
-        translated = translated + basiczones[hitcode]
-        if foul:
-            translated = translated + " in foul territory"
-    # Around the mound
-    elif re.fullmatch(r"1(5|3)?S?", hitcode):
-        translated = translated + " to "
-        if hitcode.endswith("S"):
-            translated = translated + "short of "
-            hitcode = hitcode[:-1]
-        translated = translated + basiczones[hitcode]
-    # Around the plate
-    elif re.fullmatch(r"2(5|3|L|R)?F?",hitcode):
-        translated = translated + " to "
-        foul = False
-        if hitcode.endswith("F"):
-            foul = True
-            hitcode = hitcode[:-1]
-        translated = translated + basiczones[hitcode]
-        if foul:
-            translated = translated + " in foul territory"
-    elif hitcode in singleuse_locations:
-        translated = translated + " to " + singleuse_locations[hitcode]
+    foul = False
+    if hitcode.endswith("F"):
+        foul = True
+        hitcode = hitcode[:-1]
+    
+    length = False
+    if hitcode.endswith("XD"):
+        length = True
+        translated += " to extra-deep "
+        hitcode = hitcode[:-2]
+    if hitcode.endswith("S"):
+        length = True
+        translated += " to short "
+        hitcode = hitcode[:-1]
+    if hitcode.endswith("D"):
+        length = True
+        translated += " to deep "
+        hitcode = hitcode[:-1]
 
+    if len(hitcode) > 0:
+        if not length:
+            translated += " to "
+        if hitcode.endswith("M") and hitcode[:-1] in ["7", "78", "8L", "8", "8R", "89", "9", "5", "3", "7L", "9L"]:
+            translated += "medium-deep "
+            hitcode = hitcode[:-1]
+        translated += zones[hitcode]
+
+    if foul:
+        translated += " in foul territory"
     if wall:
-        translated += ", off the wall"
+        translated += " off the wall"
     
     return translated
 
-HITLOCATION_REGEX = r"B?[GLPF]?(((7|78|8L|8|8R|89|9)(S|M|D)?)|((56|6|6M|46|4M|4|34)(S|D)?)|((5|3|7L|9L)(S|M|D)?F?)|(1(5|3)?S?)|(2(5|3|L|R)?F?)|(5L|3L|8LM|8RM|78XD|8LXD|8XD|8RXD|89XD))?W?(\+|-)?"
+HITLOCATION_REGEX = r"B?[GLPF]?(7|78|8L|8|8R|89|9|56|6|6M|46|4M|4|34|5|3|7L|9L|1|15|13|2|25|23|2L|2R|5L|3L)?(S|M|D|XD)?F?W?(\+|-)?"
 
 def parse_advinfo(id, row, advinfo, unusualplayflag):
     printstrs = []
