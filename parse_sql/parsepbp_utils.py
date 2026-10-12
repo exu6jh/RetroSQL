@@ -21,7 +21,7 @@ zones = {
     "56": "3B-shortstop hole",
     "6": "shortstop",
     "6M": "left of second base",
-    "46": "second base(?)",
+    "46": "second base",
     "4M": "right of second base",
     "4": "2B",
     "34": "1B-2B hole",

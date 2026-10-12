@@ -1,6 +1,6 @@
 import re
-from parsepbp_utils import parse_hitlocation, HITLOCATION_REGEX, debugprint, FIELD_BY_NUM
-from utils import construct_player_dict
+from parse_sql.parsepbp_utils import parse_hitlocation, HITLOCATION_REGEX, debugprint, FIELD_BY_NUM
+from parse_sql.utils import construct_player_dict
 
 std_mod_strs = {
     "BF": ", bunt foul",

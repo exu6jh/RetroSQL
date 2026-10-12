@@ -4,27 +4,27 @@ import csv, re, sqlite3
 from collections import defaultdict
 from pathlib import Path
 
-from play_objects.balk import Balk
-from play_objects.defensiveindifference import DefensiveIndifference
-from play_objects.droppedfoulerror import DroppedFoulError
-from play_objects.fielderschoice import FieldersChoice
-from play_objects.fieldplay import FieldPlay
-from play_objects.hit import Hit
-from play_objects.hitbypitch import HitByPitch
-from play_objects.interference import Interference
-from play_objects.outadvancing import OutAdvancing
-from play_objects.passedball import PassedBall
-from play_objects.pickoffcaughtsteal import PickOffCaughtStealing
-from play_objects.play import Play
-from play_objects.sacs import Sacs
-from play_objects.stolenbase import StolenBase
-from play_objects.strikeout import Strikeout
-from play_objects.walk import Walk
-from play_objects.wildpitch import WildPitch
-from parsepbp_utils import parse_advinfo, debugprint
-from parsepbp_scenarios import *
-import parsepbp_scenarios
-from utils import get_filenames
+from parse_sql.play_objects.balk import Balk
+from parse_sql.play_objects.defensiveindifference import DefensiveIndifference
+from parse_sql.play_objects.droppedfoulerror import DroppedFoulError
+from parse_sql.play_objects.fielderschoice import FieldersChoice
+from parse_sql.play_objects.fieldplay import FieldPlay
+from parse_sql.play_objects.hit import Hit
+from parse_sql.play_objects.hitbypitch import HitByPitch
+from parse_sql.play_objects.interference import Interference
+from parse_sql.play_objects.outadvancing import OutAdvancing
+from parse_sql.play_objects.passedball import PassedBall
+from parse_sql.play_objects.pickoffcaughtsteal import PickOffCaughtStealing
+from parse_sql.play_objects.play import Play
+from parse_sql.play_objects.sacs import Sacs
+from parse_sql.play_objects.stolenbase import StolenBase
+from parse_sql.play_objects.strikeout import Strikeout
+from parse_sql.play_objects.walk import Walk
+from parse_sql.play_objects.wildpitch import WildPitch
+from parse_sql.parsepbp_utils import parse_advinfo, debugprint
+from parse_sql.parsepbp_scenarios import *
+import parse_sql.parsepbp_scenarios as parsepbp_scenarios
+from parse_sql.utils import get_filenames
 
 def push_up(runner_info: list[int]) -> list[int]:
     a = [0, 1, 2, 3]
@@ -56,8 +56,8 @@ def add_to_sql(sql_obj, narrateflag: bool, pending: defaultdict[str, list[tuple]
 # expected_advinfo is the default expected advance information based on the play; actual advance info supersedes where available
 
 # Main
-def db_by_year(gametype: str, year: int) -> None:
-    eventfiles = get_filenames(Path(__file__).resolve().parent.parent / "alldata" / gametype)
+def db_by_year(root: Path, dataroot: str, gametype: str, year: int) -> None:
+    eventfiles = get_filenames(root / dataroot / gametype)
 
     narrateflag = False
     extranarrateflag = False
@@ -72,9 +72,11 @@ def db_by_year(gametype: str, year: int) -> None:
     outs = 0
     fielders = [[""] * 9, [""] * 9]
 
-    search_files = eventfiles
+    search_files = [file for file in eventfiles if str(year) in file.name]
     
-    con = sqlite3.connect(Path(__file__).resolve().parent / f"dbs_{gametype}" / f"{year}.db")
+    (root / "dbs" / f"dbs_{gametype}").mkdir(parents=True, exist_ok=True)
+
+    con = sqlite3.connect(root / "dbs" / f"dbs_{gametype}" / f"{year}.db")
     cur = con.cursor()
     cur.execute(Play.TABLE_DELETE)
     cur.execute(Play.TABLE_CREATE)
@@ -116,8 +118,6 @@ def db_by_year(gametype: str, year: int) -> None:
     radj_runner = ("", -1)
     playNum = -1
     for filename in search_files:
-        if not str(year) in filename.name:
-            continue
         pending = defaultdict(list)
         with open(filename, newline='', encoding="utf8") as csvfile:
             print(f"Processing {filename}")
@@ -507,13 +507,3 @@ def db_by_year(gametype: str, year: int) -> None:
             cur.executemany(insert, rows)
         con.commit()
     con.close()
-
-if __name__ == "__main__":
-    for i in range(1908, 2026):
-        db_by_year("events", i)
-
-    for i in range(1903, 2026):
-        db_by_year("postseason", i)
-    
-    for i in range(1933, 2026):
-        db_by_year("allstar", i)

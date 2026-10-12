@@ -7,7 +7,7 @@ from pathlib import Path
 # Takes a folder name and returns the tuple of file paths of all its contents
 @cache
 def get_filenames(folder: Path) -> tuple[str, ...]:
-    return tuple(path for path in folder.iterdir() if path.is_file())
+    return tuple(sorted(path for path in folder.iterdir() if path.is_file()))
 
 def sort_dict(dct: dict, key: int = 0) -> dict:
     return dict(sorted(dct.items(), key=lambda item:item[key]))
